@@ -10,8 +10,7 @@ class HOAPoster:
     def __init__(self):
         # Facebook credentials
         self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-        self.group_id = os.getenv('FACEBOOK_GROUP_ID')
-        
+                
         # Anthropic API
         self.anthropic = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         
@@ -132,27 +131,29 @@ Make it engaging and include key details residents need to know. Keep it under 2
             return None
     
     def post_to_facebook(self, message):
-        """Post message to Facebook group"""
-        url = f"https://graph.facebook.com/v21.0/{self.group_id}/feed"
+    """Post message to Facebook Page"""
+    # Post to the Page's feed
+    url = f"https://graph.facebook.com/v21.0/me/feed"
+    
+    payload = {
+        'message': message,
+        'access_token': self.fb_token
+    }
+    
+    try:
+        response = requests.post(url, data=payload)
         
-        payload = {
-            'message': message,
-            'access_token': self.fb_token
-        }
-        
-        try:
-            response = requests.post(url, data=payload)
-            
-            if response.status_code == 200:
-                post_id = response.json().get('id')
-                print(f"✓ Posted successfully! Post ID: {post_id}")
-                return True
-            else:
-                print(f"✗ Error posting: {response.json()}")
-                return False
-        except Exception as e:
-            print(f"✗ Error posting to Facebook: {e}")
+        if response.status_code == 200:
+            post_id = response.json().get('id')
+            print(f"✓ Posted successfully to Page! Post ID: {post_id}")
+            return True
+        else:
+            error_data = response.json()
+            print(f"✗ Error posting: {error_data}")
             return False
+    except Exception as e:
+        print(f"✗ Error posting to Facebook: {e}")
+        return False
     
     def create_and_post(self, topic, context=""):
         """Generate content and post"""
@@ -301,4 +302,5 @@ Key: GOOGLE_REFRESH_TOKEN
 Value: [from your tokens.txt file]
 
 Key: RUN_MODE
+
 Value: calendar
