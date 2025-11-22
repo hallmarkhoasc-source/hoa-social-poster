@@ -13,7 +13,7 @@ class HOAPoster:
         
         # Gemini API setup
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         
         # Google Calendar setup
         self.calendar_service = None
@@ -224,4 +224,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
