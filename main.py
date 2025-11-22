@@ -10,11 +10,9 @@ class HOAPoster:
     def __init__(self):
         # Facebook credentials
         self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-        self.page_id = 882966761564424
         
-        # Get Page ID
-        if self.fb_token:
-            self.page_id = self.get_page_id()
+        # Use the known Page ID
+        self.page_id = '882966761564424'  # Hallmark HOA Page
         
         # Gemini API setup
         genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
@@ -338,6 +336,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
