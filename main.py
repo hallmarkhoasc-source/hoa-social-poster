@@ -8,18 +8,39 @@ import requests
 
 class HOAPoster:
     def __init__(self):
-        # Facebook credentials
-        self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-        
-        # Gemini API setup
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
-        
-        # Google Calendar setup
-        self.calendar_service = None
-        if self.has_google_credentials():
-            self.calendar_service = self.setup_google_calendar()
+    # Facebook credentials
+    self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+    self.page_id = None
     
+    # Get Page ID
+    if self.fb_token:
+        self.page_id = self.get_page_id()
+    
+    # Gemini API setup
+    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+    self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+    
+    # Google Calendar setup
+    self.calendar_service = None
+    if self.has_google_credentials():
+        self.calendar_service = self.setup_google_calendar()
+
+    def get_page_id(self):
+        """Get the Facebook Page ID"""
+        try:
+            url = f"https://graph.facebook.com/v21.0/me?access_token={self.fb_token}"
+            response = requests.get(url)
+            if response.status_code == 200:
+                page_id = response.json().get('id')
+                print(f"Page ID: {page_id}")
+                return page_id
+            else:
+                print(f"Error getting Page ID: {response.json()}")
+                return None
+        except Exception as e:
+            print(f"Error getting Page ID: {e}")
+            return None
+  
     def has_google_credentials(self):
         """Check if Google credentials are available"""
         return all([
@@ -138,86 +159,91 @@ Requirements:
             return None
     
     def create_facebook_event(self, event):
-        """Create a Facebook Event from a calendar event"""
-        event_name = event.get('summary', 'HOA Event')
-        event_start = event.get('start', {})
-        event_end = event.get('end', {})
-        event_location = event.get('location', '')
-        event_description = event.get('description', '')
-        
-        # Parse start time
-        start_time = event_start.get('dateTime', event_start.get('date', ''))
-        end_time = event_end.get('dateTime', event_end.get('date', ''))
-        
-        # Convert to Unix timestamp if dateTime, or keep as date string
-        try:
-            if 'T' in start_time:  # DateTime format
-                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                start_timestamp = int(start_dt.timestamp())
-            else:  # All-day event
-                start_dt = datetime.fromisoformat(start_time)
-                start_timestamp = start_time  # Facebook accepts YYYY-MM-DD for all-day
-                
-            if end_time:
-                if 'T' in end_time:
-                    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-                    end_timestamp = int(end_dt.timestamp())
-                else:
-                    end_timestamp = end_time
+    """Create a Facebook Event from a calendar event"""
+    
+    if not self.page_id:
+        print("Page ID not available")
+        return False
+    
+    event_name = event.get('summary', 'HOA Event')
+    event_start = event.get('start', {})
+    event_end = event.get('end', {})
+    event_location = event.get('location', '')
+    event_description = event.get('description', '')
+    
+    # Parse start time
+    start_time = event_start.get('dateTime', event_start.get('date', ''))
+    end_time = event_end.get('dateTime', event_end.get('date', ''))
+    
+    # Convert to Unix timestamp if dateTime, or keep as date string
+    try:
+        if 'T' in start_time:  # DateTime format
+            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            start_timestamp = int(start_dt.timestamp())
+        else:  # All-day event
+            start_dt = datetime.fromisoformat(start_time)
+            start_timestamp = start_time  # Facebook accepts YYYY-MM-DD for all-day
+            
+        if end_time:
+            if 'T' in end_time:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_timestamp = int(end_dt.timestamp())
             else:
-                # Default to 2 hours after start if no end time
-                if isinstance(start_timestamp, int):
-                    end_timestamp = start_timestamp + 7200
-                else:
-                    end_timestamp = start_timestamp
-        except Exception as e:
-            print(f"Error parsing event times: {e}")
-            return False
-        
-        # Generate a description using AI
-        description_prompt = f"""Write a brief, friendly description for this HOA community event (2-3 sentences):
+                end_timestamp = end_time
+        else:
+            # Default to 2 hours after start if no end time
+            if isinstance(start_timestamp, int):
+                end_timestamp = start_timestamp + 7200
+            else:
+                end_timestamp = start_timestamp
+    except Exception as e:
+        print(f"Error parsing event times: {e}")
+        return False
+    
+    # Generate a description using AI
+    description_prompt = f"""Write a brief, friendly description for this HOA community event (2-3 sentences):
 
 Event: {event_name}
 Location: {event_location}
 Details: {event_description}
 
 Keep it informative and welcoming. Use a warm, neighborly tone."""
+    
+    try:
+        response = self.model.generate_content(description_prompt)
+        ai_description = response.text
+    except:
+        ai_description = event_description or f"Join us for {event_name}!"
+    
+    # Create the Facebook Event using Page ID
+    url = f"https://graph.facebook.com/v21.0/{self.page_id}/events"
+    
+    payload = {
+        'name': event_name,
+        'start_time': start_timestamp,
+        'end_time': end_timestamp,
+        'description': ai_description,
+        'access_token': self.fb_token
+    }
+    
+    # Add location if available
+    if event_location:
+        payload['location'] = event_location
+    
+    try:
+        response = requests.post(url, data=payload)
         
-        try:
-            response = self.model.generate_content(description_prompt)
-            ai_description = response.text
-        except:
-            ai_description = event_description or f"Join us for {event_name}!"
-        
-        # Create the Facebook Event
-        url = f"https://graph.facebook.com/v21.0/me/events"
-        
-        payload = {
-            'name': event_name,
-            'start_time': start_timestamp,
-            'end_time': end_timestamp,
-            'description': ai_description,
-            'access_token': self.fb_token
-        }
-        
-        # Add location if available
-        if event_location:
-            payload['location'] = event_location
-        
-        try:
-            response = requests.post(url, data=payload)
-            
-            if response.status_code == 200:
-                event_id = response.json().get('id')
-                print(f"✓ Created Facebook Event! Event ID: {event_id}")
-                return True
-            else:
-                error_data = response.json()
-                print(f"✗ Error creating event: {error_data}")
-                return False
-        except Exception as e:
-            print(f"✗ Error creating Facebook event: {e}")
+        if response.status_code == 200:
+            event_id = response.json().get('id')
+            print(f"✓ Created Facebook Event! Event ID: {event_id}")
+            return True
+        else:
+            error_data = response.json()
+            print(f"✗ Error creating event: {error_data}")
             return False
+    except Exception as e:
+        print(f"✗ Error creating Facebook event: {e}")
+        return False
     
     def post_to_facebook(self, message):
         """Post message to Facebook Page"""
@@ -328,3 +354,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
