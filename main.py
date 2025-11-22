@@ -10,7 +10,7 @@ class HOAPoster:
     def __init__(self):
         # Facebook credentials
         self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-        self.page_id = None
+        self.page_id = 882966761564424
         
         # Get Page ID
         if self.fb_token:
@@ -25,22 +25,6 @@ class HOAPoster:
         if self.has_google_credentials():
             self.calendar_service = self.setup_google_calendar()
 
-    def get_page_id(self):
-        """Get the Facebook Page ID"""
-        try:
-            url = f"https://graph.facebook.com/v21.0/me?access_token={self.fb_token}"
-            response = requests.get(url)
-            if response.status_code == 200:
-                page_id = response.json().get('id')
-                print(f"Page ID: {page_id}")
-                return page_id
-            else:
-                print(f"Error getting Page ID: {response.json()}")
-                return None
-        except Exception as e:
-            print(f"Error getting Page ID: {e}")
-            return None
-  
     def has_google_credentials(self):
         """Check if Google credentials are available"""
         return all([
@@ -354,6 +338,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
