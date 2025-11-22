@@ -159,91 +159,91 @@ Requirements:
             return None
     
     def create_facebook_event(self, event):
-    """Create a Facebook Event from a calendar event"""
-    
-    if not self.page_id:
-        print("Page ID not available")
-        return False
-    
-    event_name = event.get('summary', 'HOA Event')
-    event_start = event.get('start', {})
-    event_end = event.get('end', {})
-    event_location = event.get('location', '')
-    event_description = event.get('description', '')
-    
-    # Parse start time
-    start_time = event_start.get('dateTime', event_start.get('date', ''))
-    end_time = event_end.get('dateTime', event_end.get('date', ''))
-    
-    # Convert to Unix timestamp if dateTime, or keep as date string
-    try:
-        if 'T' in start_time:  # DateTime format
-            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            start_timestamp = int(start_dt.timestamp())
-        else:  # All-day event
-            start_dt = datetime.fromisoformat(start_time)
-            start_timestamp = start_time  # Facebook accepts YYYY-MM-DD for all-day
-            
-        if end_time:
-            if 'T' in end_time:
-                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-                end_timestamp = int(end_dt.timestamp())
+        """Create a Facebook Event from a calendar event"""
+        
+        if not self.page_id:
+            print("Page ID not available")
+            return False
+        
+        event_name = event.get('summary', 'HOA Event')
+        event_start = event.get('start', {})
+        event_end = event.get('end', {})
+        event_location = event.get('location', '')
+        event_description = event.get('description', '')
+        
+        # Parse start time
+        start_time = event_start.get('dateTime', event_start.get('date', ''))
+        end_time = event_end.get('dateTime', event_end.get('date', ''))
+        
+        # Convert to Unix timestamp if dateTime, or keep as date string
+        try:
+            if 'T' in start_time:  # DateTime format
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_timestamp = int(start_dt.timestamp())
+            else:  # All-day event
+                start_dt = datetime.fromisoformat(start_time)
+                start_timestamp = start_time  # Facebook accepts YYYY-MM-DD for all-day
+                
+            if end_time:
+                if 'T' in end_time:
+                    end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                    end_timestamp = int(end_dt.timestamp())
+                else:
+                    end_timestamp = end_time
             else:
-                end_timestamp = end_time
-        else:
-            # Default to 2 hours after start if no end time
-            if isinstance(start_timestamp, int):
-                end_timestamp = start_timestamp + 7200
-            else:
-                end_timestamp = start_timestamp
-    except Exception as e:
-        print(f"Error parsing event times: {e}")
-        return False
-    
-    # Generate a description using AI
-    description_prompt = f"""Write a brief, friendly description for this HOA community event (2-3 sentences):
+                # Default to 2 hours after start if no end time
+                if isinstance(start_timestamp, int):
+                    end_timestamp = start_timestamp + 7200
+                else:
+                    end_timestamp = start_timestamp
+        except Exception as e:
+            print(f"Error parsing event times: {e}")
+            return False
+        
+        # Generate a description using AI
+        description_prompt = f"""Write a brief, friendly description for this HOA community event (2-3 sentences):
 
 Event: {event_name}
 Location: {event_location}
 Details: {event_description}
 
 Keep it informative and welcoming. Use a warm, neighborly tone."""
-    
-    try:
-        response = self.model.generate_content(description_prompt)
-        ai_description = response.text
-    except:
-        ai_description = event_description or f"Join us for {event_name}!"
-    
-    # Create the Facebook Event using Page ID
-    url = f"https://graph.facebook.com/v21.0/{self.page_id}/events"
-    
-    payload = {
-        'name': event_name,
-        'start_time': start_timestamp,
-        'end_time': end_timestamp,
-        'description': ai_description,
-        'access_token': self.fb_token
-    }
-    
-    # Add location if available
-    if event_location:
-        payload['location'] = event_location
-    
-    try:
-        response = requests.post(url, data=payload)
         
-        if response.status_code == 200:
-            event_id = response.json().get('id')
-            print(f"✓ Created Facebook Event! Event ID: {event_id}")
-            return True
-        else:
-            error_data = response.json()
-            print(f"✗ Error creating event: {error_data}")
+        try:
+            response = self.model.generate_content(description_prompt)
+            ai_description = response.text
+        except:
+            ai_description = event_description or f"Join us for {event_name}!"
+        
+        # Create the Facebook Event using Page ID
+        url = f"https://graph.facebook.com/v21.0/{self.page_id}/events"
+        
+        payload = {
+            'name': event_name,
+            'start_time': start_timestamp,
+            'end_time': end_timestamp,
+            'description': ai_description,
+            'access_token': self.fb_token
+        }
+        
+        # Add location if available
+        if event_location:
+            payload['location'] = event_location
+        
+        try:
+            response = requests.post(url, data=payload)
+            
+            if response.status_code == 200:
+                event_id = response.json().get('id')
+                print(f"✓ Created Facebook Event! Event ID: {event_id}")
+                return True
+            else:
+                error_data = response.json()
+                print(f"✗ Error creating event: {error_data}")
+                return False
+        except Exception as e:
+            print(f"✗ Error creating Facebook event: {e}")
             return False
-    except Exception as e:
-        print(f"✗ Error creating Facebook event: {e}")
-        return False
     
     def post_to_facebook(self, message):
         """Post message to Facebook Page"""
@@ -354,5 +354,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
