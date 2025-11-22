@@ -3,16 +3,17 @@ import sys
 from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from anthropic import Anthropic
+import google.generativeai as genai
 import requests
 
 class HOAPoster:
     def __init__(self):
         # Facebook credentials
         self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-                
-        # Anthropic API
-        self.anthropic = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        # Gemini API setup
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
         # Google Calendar setup
         self.calendar_service = None
@@ -67,8 +68,8 @@ class HOAPoster:
             return []
     
     def generate_post_content(self, topic, context=""):
-        """Use Claude to generate post content"""
-        prompt = f"""Generate a friendly, concise Facebook post for an HOA community group about: {topic}
+        """Use Gemini to generate post content"""
+        prompt = f"""Generate a friendly, concise Facebook post for an HOA community Page about: {topic}
 
 Additional context: {context}
 
@@ -81,12 +82,8 @@ Requirements:
 - Use a warm, community-focused tone"""
 
         try:
-            message = self.anthropic.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return message.content[0].text
+            response = self.model.generate_content(prompt)
+            return response.text
         except Exception as e:
             print(f"Error generating content: {e}")
             return None
@@ -120,40 +117,36 @@ Details: {event_description}
 Make it engaging and include key details residents need to know. Keep it under 250 words."""
 
         try:
-            message = self.anthropic.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return message.content[0].text
+            response = self.model.generate_content(prompt)
+            return response.text
         except Exception as e:
             print(f"Error generating event post: {e}")
             return None
     
     def post_to_facebook(self, message):
-    """Post message to Facebook Page"""
-    # Post to the Page's feed
-    url = f"https://graph.facebook.com/v21.0/me/feed"
-    
-    payload = {
-        'message': message,
-        'access_token': self.fb_token
-    }
-    
-    try:
-        response = requests.post(url, data=payload)
+        """Post message to Facebook Page"""
+        # Post to the Page's feed
+        url = f"https://graph.facebook.com/v21.0/me/feed"
         
-        if response.status_code == 200:
-            post_id = response.json().get('id')
-            print(f"✓ Posted successfully to Page! Post ID: {post_id}")
-            return True
-        else:
-            error_data = response.json()
-            print(f"✗ Error posting: {error_data}")
+        payload = {
+            'message': message,
+            'access_token': self.fb_token
+        }
+        
+        try:
+            response = requests.post(url, data=payload)
+            
+            if response.status_code == 200:
+                post_id = response.json().get('id')
+                print(f"✓ Posted successfully to Page! Post ID: {post_id}")
+                return True
+            else:
+                error_data = response.json()
+                print(f"✗ Error posting: {error_data}")
+                return False
+        except Exception as e:
+            print(f"✗ Error posting to Facebook: {e}")
             return False
-    except Exception as e:
-        print(f"✗ Error posting to Facebook: {e}")
-        return False
     
     def create_and_post(self, topic, context=""):
         """Generate content and post"""
@@ -231,76 +224,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
 
-### **Step 4: Upload main.py to GitHub**
-
-1. Go to your GitHub repository
-2. Click "Add file" → "Create new file"
-3. Name it `main.py`
-4. Paste the code above
-5. Click "Commit changes"
-
-### **Step 5: Connect Render to GitHub**
-
-1. Log in to https://dashboard.render.com
-2. Click "New +" button in top right
-3. Select "Cron Job"
-4. Click "Connect account" under GitHub
-5. Authorize Render to access your GitHub
-6. Select your `hoa-social-poster` repository
-
-### **Step 6: Configure the Cron Job**
-
-Fill in these settings:
-
-**Basic Settings:**
-- **Name:** `hoa-poster`
-- **Region:** Oregon (US West) - or closest to you
-- **Branch:** `main`
-- **Runtime:** Python 3
-
-**Build Settings:**
-- **Build Command:** `pip install -r requirements.txt`
-- **Start Command:** `python main.py`
-
-**Schedule:**
-- **Schedule:** `0 9 * * *` (runs daily at 9 AM UTC)
-  - Or customize: `0 9,18 * * *` (9 AM and 6 PM UTC)
-  - [Use this tool to help](https://crontab.guru/)
-
-**Instance Type:**
-- **Plan:** Free
-
-Click "Create Cron Job" (don't worry, we'll add environment variables next)
-
-### **Step 7: Add Environment Variables**
-
-After creating the cron job:
-
-1. You'll be on your cron job dashboard
-2. Click "Environment" in the left sidebar
-3. Click "Add Environment Variable"
-4. Add each of these:
-```
-Key: FACEBOOK_ACCESS_TOKEN
-Value: [your Facebook token]
-
-Key: FACEBOOK_GROUP_ID
-Value: [your Facebook group ID]
-
-Key: ANTHROPIC_API_KEY
-Value: [your Anthropic API key]
-
-Key: GOOGLE_CLIENT_ID
-Value: [from your tokens.txt file]
-
-Key: GOOGLE_CLIENT_SECRET
-Value: [from your tokens.txt file]
-
-Key: GOOGLE_REFRESH_TOKEN
-Value: [from your tokens.txt file]
-
-Key: RUN_MODE
-
-Value: calendar
