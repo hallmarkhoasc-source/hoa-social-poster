@@ -69,17 +69,20 @@ class HOAPoster:
     
     def generate_post_content(self, topic, context=""):
         """Use Gemini to generate post content"""
-        prompt = f"""Generate a friendly, concise Facebook post for an HOA community Page about: {topic}
+        prompt = f"""Generate a friendly, professional Facebook post for Hallmark HOA community about: {topic}
 
 Additional context: {context}
 
 Requirements:
-- Keep it conversational and neighborly
-- Include relevant details
+- Write in a warm, neighborly tone appropriate for a homeowners association
+- Keep it conversational but professional
+- Include relevant details clearly
+- Keep it under 250 words
 - End with a call to action if appropriate
-- Keep it under 300 words
-- Don't use hashtags unless very relevant
-- Use a warm, community-focused tone"""
+- Use 1-2 relevant hashtags maximum (like #HallmarkHOA)
+- Do NOT use placeholder text or brackets
+- Do NOT mention virtual events unless specifically requested
+- Do NOT use excessive emojis (1-2 maximum)"""
 
         try:
             response = self.model.generate_content(prompt)
@@ -107,14 +110,22 @@ Requirements:
         except:
             formatted_time = event_time
         
-        prompt = f"""Generate a friendly Facebook post announcing this HOA event:
+        prompt = f"""Generate a friendly, professional Facebook post announcing this HOA community event:
 
 Event: {event_name}
 Time: {formatted_time}
 Location: {event_location}
 Details: {event_description}
 
-Make it engaging and include key details residents need to know. Keep it under 250 words."""
+Requirements:
+- Write in a warm, neighborly tone
+- Include all key details (what, when, where)
+- Keep it concise and easy to read (under 200 words)
+- End with a clear call to action (e.g., "See you there!" or "Mark your calendars!")
+- Only use relevant hashtags - maximum 2-3 simple ones like #HallmarkHOA #CommunityEvent
+- Do NOT mention virtual events or online attendance
+- Do NOT use placeholder text like [YourHOAName] - the community name is Hallmark HOA
+- Do NOT use excessive emojis (1-2 maximum)"""
 
         try:
             response = self.model.generate_content(prompt)
@@ -224,5 +235,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
