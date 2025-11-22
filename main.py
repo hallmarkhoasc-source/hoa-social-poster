@@ -123,13 +123,16 @@ Location: {event_location}
 Details: {event_description}
 
 Requirements:
+- Start with a clear event announcement (e.g., "Join us for...")
+- Include the date and time on its own line or clearly stated
+- Mention the location clearly
 - Warm, neighborly tone
-- Include all key details (what, when, where)
 - Under 200 words
 - Clear call to action (e.g., "See you there!" or "Mark your calendars!")
 - Maximum 2-3 hashtags (like #HallmarkHOA #CommunityEvent)
 - No placeholder text or virtual event mentions
-- 1-2 emojis maximum"""
+- 1-2 emojis maximum
+- Format should help Facebook detect this as an event (clear date/time/location)"""
 
         try:
             response = self.model.generate_content(prompt)
@@ -238,3 +241,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
