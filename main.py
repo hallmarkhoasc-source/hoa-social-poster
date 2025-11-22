@@ -8,22 +8,22 @@ import requests
 
 class HOAPoster:
     def __init__(self):
-    # Facebook credentials
-    self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-    self.page_id = None
-    
-    # Get Page ID
-    if self.fb_token:
-        self.page_id = self.get_page_id()
-    
-    # Gemini API setup
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-    self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
-    
-    # Google Calendar setup
-    self.calendar_service = None
-    if self.has_google_credentials():
-        self.calendar_service = self.setup_google_calendar()
+        # Facebook credentials
+        self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+        self.page_id = None
+        
+        # Get Page ID
+        if self.fb_token:
+            self.page_id = self.get_page_id()
+        
+        # Gemini API setup
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        
+        # Google Calendar setup
+        self.calendar_service = None
+        if self.has_google_credentials():
+            self.calendar_service = self.setup_google_calendar()
 
     def get_page_id(self):
         """Get the Facebook Page ID"""
@@ -354,4 +354,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
