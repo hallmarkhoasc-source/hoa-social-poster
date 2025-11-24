@@ -403,6 +403,324 @@ Requirements:
             import traceback
             traceback.print_exc()
 
+    def check_facebook_post_emails(self):
+        """Check for emails requesting Facebook posts"""
+        if not hasattr(self, 'gmail_service') or not self.gmail_service:
+            print("Gmail not configured")
+            return
+        
+        print("\n" + "="*60)
+        print("Checking for Facebook post request emails...")
+        print("="*60 + "\n")
+        
+        try:
+            # Search for unread emails with "Post to Facebook" in subject
+            query = 'subject:"Post to Facebook" is:unread'
+            results = self.gmail_service.users().messages().list(
+                userId='me',
+                q=query,
+                maxResults=5
+            ).execute()
+            
+            messages = results.get('messages', [])
+            
+            if not messages:
+                print("No Facebook post request emails found")
+                return
+            
+            print(f"Found {len(messages)} post request email(s)")
+            
+            for msg in messages:
+                self.process_facebook_post_email(msg['id'])
+                
+        except Exception as e:
+            print(f"Error checking emails: {e}")
+    
+    def is_approved_sender(self, email_address):
+        """Check if sender is in approved list"""
+        approved_senders = os.getenv('APPROVED_EMAIL_SENDERS', '')
+        
+        if not approved_senders:
+            print("Warning: No approved senders configured")
+            return False
+        
+        # Split by comma and clean whitespace
+        approved_list = [sender.strip().lower() for sender in approved_senders.split(',')]
+        
+        return email_address.lower() in approved_list
+    
+    def extract_sender_email(self, message):
+        """Extract sender email address from message"""
+        try:
+            headers = message['payload']['headers']
+            from_header = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
+            
+            # Extract email from "Name <email@domain.com>" format
+            if '<' in from_header and '>' in from_header:
+                email = from_header.split('<')[1].split('>')[0]
+            else:
+                email = from_header
+            
+            return email.strip()
+        except Exception as e:
+            print(f"Error extracting sender: {e}")
+            return ""
+    
+    def extract_images_from_email(self, message):
+        """Extract all images from email (attached or inline)"""
+        images = []
+        
+        try:
+            parts = message.get('payload', {}).get('parts', [])
+            
+            # Also check if the payload itself is an image
+            if 'mimeType' in message.get('payload', {}):
+                main_mime = message['payload']['mimeType']
+                if main_mime.startswith('image/'):
+                    parts = [message['payload']]
+            
+            def process_part(part):
+                mime_type = part.get('mimeType', '')
+                filename = part.get('filename', '')
+                
+                # Check for images
+                if mime_type.startswith('image/'):
+                    attachment_id = part['body'].get('attachmentId')
+                    data = part['body'].get('data')
+                    
+                    if attachment_id:
+                        # Get attachment
+                        attachment = self.gmail_service.users().messages().attachments().get(
+                            userId='me',
+                            messageId=message['id'],
+                            id=attachment_id
+                        ).execute()
+                        data = attachment['data']
+                    
+                    if data:
+                        import base64
+                        image_data = base64.urlsafe_b64decode(data)
+                        images.append({
+                            'filename': filename or f'image_{len(images)}.jpg',
+                            'data': image_data,
+                            'mime_type': mime_type
+                        })
+                
+                # Recursively process multipart
+                if 'parts' in part:
+                    for subpart in part['parts']:
+                        process_part(subpart)
+            
+            for part in parts:
+                process_part(part)
+            
+            return images
+            
+        except Exception as e:
+            print(f"Error extracting images: {e}")
+            return []
+    
+    def generate_facebook_post_from_email(self, subject, body):
+        """Generate a Facebook post from email content using Gemini"""
+        import time
+        
+        prompt = f"""You are writing a Facebook post for Hallmark HOA based on an email request.
+
+Email Subject: {subject}
+Email Content:
+{body[:3000]}
+
+Requirements:
+- Transform the email content into an engaging, friendly Facebook post
+- Keep the key information and message
+- Use a warm, community-focused tone appropriate for an HOA
+- Keep it concise (under 300 words)
+- Make it conversational and suitable for social media
+- Use appropriate paragraph breaks for readability
+- Add 1-2 relevant hashtags (like #HallmarkHOA)
+- Use 1-2 emojis maximum if appropriate
+- Do NOT mention that this came from an email
+- Write as if the HOA is speaking directly to residents"""
+
+        # Retry logic for rate limits
+        max_retries = 3
+        retry_delay = 5
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.model.generate_content(prompt)
+                return response.text
+                
+            except Exception as e:
+                error_message = str(e)
+                
+                if '429' in error_message or 'Resource exhausted' in error_message:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delay * (2 ** attempt)
+                        print(f"Rate limit hit. Waiting {wait_time} seconds before retry {attempt + 2}/{max_retries}...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"Error after {max_retries} attempts: {e}")
+                        return None
+                else:
+                    print(f"Error generating post: {e}")
+                    return None
+        
+        return None
+    
+    def post_to_facebook_with_images(self, message, images):
+        """Post message with images to Facebook Page"""
+        
+        if not images:
+            # No images, use regular text post
+            return self.post_to_facebook(message)
+        
+        try:
+            # Facebook requires images to be uploaded first, then posted
+            uploaded_photo_ids = []
+            
+            # Upload each image
+            for idx, image in enumerate(images[:10]):  # Max 10 images
+                print(f"Uploading image {idx + 1}/{min(len(images), 10)}...")
+                
+                # Upload photo without publishing
+                url = f"https://graph.facebook.com/v21.0/me/photos"
+                
+                files = {
+                    'source': (image['filename'], image['data'], image['mime_type'])
+                }
+                
+                data = {
+                    'access_token': self.fb_token,
+                    'published': 'false'  # Don't publish yet
+                }
+                
+                response = requests.post(url, files=files, data=data)
+                
+                if response.status_code == 200:
+                    photo_id = response.json().get('id')
+                    uploaded_photo_ids.append({'media_fbid': photo_id})
+                    print(f"✓ Uploaded image {idx + 1}")
+                else:
+                    print(f"✗ Error uploading image {idx + 1}: {response.json()}")
+            
+            if not uploaded_photo_ids:
+                print("No images uploaded successfully, posting text only")
+                return self.post_to_facebook(message)
+            
+            # Now create post with all uploaded images
+            url = f"https://graph.facebook.com/v21.0/me/feed"
+            
+            payload = {
+                'message': message,
+                'attached_media': uploaded_photo_ids,
+                'access_token': self.fb_token
+            }
+            
+            # Need to send as JSON for attached_media
+            import json
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(url, data=json.dumps(payload), headers=headers)
+            
+            if response.status_code == 200:
+                post_id = response.json().get('id')
+                print(f"✓ Posted successfully with {len(uploaded_photo_ids)} image(s)! Post ID: {post_id}")
+                return True
+            else:
+                error_data = response.json()
+                print(f"✗ Error posting: {error_data}")
+                return False
+                
+        except Exception as e:
+            print(f"✗ Error posting with images: {e}")
+            return False
+    
+    def process_facebook_post_email(self, message_id):
+        """Process an email requesting a Facebook post"""
+        try:
+            # Get the full message
+            message = self.gmail_service.users().messages().get(
+                userId='me',
+                id=message_id,
+                format='full'
+            ).execute()
+            
+            # Extract sender
+            sender_email = self.extract_sender_email(message)
+            print(f"\nProcessing post request from: {sender_email}")
+            
+            # Check if sender is approved
+            if not self.is_approved_sender(sender_email):
+                print(f"✗ Sender {sender_email} is not in approved list - ignoring")
+                # Mark as read but don't post
+                self.gmail_service.users().messages().modify(
+                    userId='me',
+                    id=message_id,
+                    body={'removeLabelIds': ['UNREAD']}
+                ).execute()
+                return
+            
+            print(f"✓ Sender approved")
+            
+            # Extract subject and body
+            headers = message['payload']['headers']
+            subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'Facebook Post')
+            body = self.get_email_body(message)
+            
+            print(f"Subject: {subject}")
+            print(f"Body preview: {body[:200]}...")
+            
+            # Extract images
+            images = self.extract_images_from_email(message)
+            print(f"Found {len(images)} image(s)")
+            
+            # Generate Facebook post content
+            post_content = self.generate_facebook_post_from_email(subject, body)
+            
+            if not post_content:
+                print("✗ Failed to generate post content")
+                return
+            
+            print("\nGenerated post:")
+            print("-" * 60)
+            print(post_content)
+            print("-" * 60)
+            
+            # Post to Facebook with images
+            success = self.post_to_facebook_with_images(post_content, images)
+            
+            if success:
+                print("✓ Posted to Facebook")
+                
+                # Label as "Posted" and archive
+                label_id = self.get_or_create_gmail_label("Posted")
+                
+                if label_id:
+                    self.gmail_service.users().messages().modify(
+                        userId='me',
+                        id=message_id,
+                        body={
+                            'removeLabelIds': ['UNREAD', 'INBOX'],
+                            'addLabelIds': [label_id]
+                        }
+                    ).execute()
+                    print("✓ Marked as read, labeled, and archived")
+                else:
+                    self.gmail_service.users().messages().modify(
+                        userId='me',
+                        id=message_id,
+                        body={'removeLabelIds': ['UNREAD']}
+                    ).execute()
+                    print("✓ Marked as read")
+            else:
+                print("✗ Failed to post to Facebook")
+                
+        except Exception as e:
+            print(f"Error processing Facebook post email: {e}")
+            import traceback
+            traceback.print_exc()
+            
     def get_email_body(self, message):
         """Extract email body text"""
         try:
@@ -663,10 +981,15 @@ def main():
             print("Running meeting minutes mode...")
             poster.check_meeting_minutes_emails()
         
+        elif mode == 'facebook_posts':
+            print("Running Facebook post mode...")
+            poster.check_facebook_post_emails()
+        
         elif mode == 'both':
             print("Running both calendar and meeting minutes modes...")
             poster.check_and_post_event_reminders()
             poster.check_meeting_minutes_emails()
+            poster.check_facebook_post_emails()
         
         elif mode == 'custom':
             print("Running custom mode...")
@@ -692,6 +1015,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
