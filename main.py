@@ -393,11 +393,6 @@ Requirements:
     def generate_meeting_minutes_post(self, subject, body, drive_link=None):
         """Generate a Facebook post about meeting minutes"""
         
-        link_text = ""
-        # Add the Drive link at the end
-            if drive_link:
-                post_text += f"\n\n📋 Read the full minutes: {drive_link}"
-        
         prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
 
 Email Subject: {subject}
@@ -419,7 +414,7 @@ Requirements:
             
             # Add the Drive link at the end
             if drive_link:
-                post_text += f"\n\n📄 Read the full minutes: {drive_link}"
+                post_text += f"\n\n📋 Read the full minutes: {drive_link}"
             
             return post_text
         except Exception as e:
@@ -570,6 +565,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
