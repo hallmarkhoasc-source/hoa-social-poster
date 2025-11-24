@@ -425,16 +425,19 @@ Requirements:
             print(f"Error generating meeting minutes post: {e}")
             return None
             
-    def extract_pdf_attachment(self, message):
-        """Extract PDF attachment from email"""
+    def extract_document_attachment(self, message):
+        """Extract document attachment (PDF or Word) from email"""
         try:
             parts = message.get('payload', {}).get('parts', [])
             
             for part in parts:
                 filename = part.get('filename', '')
                 
-                # Check if it's a PDF
-                if filename.lower().endswith('.pdf'):
+                # Check if it's a PDF or Word document
+                if (filename.lower().endswith('.pdf') or 
+                    filename.lower().endswith('.docx') or 
+                    filename.lower().endswith('.doc')):
+                    
                     attachment_id = part['body'].get('attachmentId')
                     
                     if attachment_id:
@@ -449,12 +452,20 @@ Requirements:
                         import base64
                         file_data = base64.urlsafe_b64decode(attachment['data'])
                         
-                        return filename, file_data
+                        # Determine MIME type
+                        if filename.lower().endswith('.pdf'):
+                            mime_type = 'application/pdf'
+                        elif filename.lower().endswith('.docx'):
+                            mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        else:  # .doc
+                            mime_type = 'application/msword'
+                        
+                        return filename, file_data, mime_type
             
-            return None, None
+            return None, None, None
         except Exception as e:
-            print(f"Error extracting PDF: {e}")
-            return None, None
+            print(f"Error extracting document: {e}")
+            return None, None, None
     
     def upload_to_drive(self, filename, file_data):
         """Upload PDF to Google Drive and return shareable link"""
@@ -558,6 +569,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
