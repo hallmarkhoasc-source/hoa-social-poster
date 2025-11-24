@@ -329,15 +329,15 @@ Requirements:
             print(f"\nProcessing email: {subject}")
             print(f"Body preview: {body[:200]}...")
             
-            # Extract and upload PDF attachment
-            pdf_filename, pdf_data = self.extract_pdf_attachment(message)
+            # Extract and upload document attachment (PDF or Word)
+            doc_filename, doc_data, mime_type = self.extract_document_attachment(message)
             drive_link = None
             
-            if pdf_filename and pdf_data:
-                print(f"Found PDF attachment: {pdf_filename}")
-                drive_link = self.upload_to_drive(pdf_filename, pdf_data)
+            if doc_filename and doc_data:
+                print(f"Found document attachment: {doc_filename}")
+                drive_link = self.upload_to_drive(doc_filename, doc_data, mime_type)
             else:
-                print("No PDF attachment found")
+                print("No document attachment found")
             
             # Generate post from meeting minutes
             post_content = self.generate_meeting_minutes_post(subject, body, drive_link)
@@ -394,8 +394,9 @@ Requirements:
         """Generate a Facebook post about meeting minutes"""
         
         link_text = ""
-        if drive_link:
-            link_text = f"\n\nView the full meeting minutes here: {drive_link}"
+        # Add the Drive link at the end
+            if drive_link:
+                post_text += f"\n\n📋 Read the full minutes: {drive_link}"
         
         prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
 
@@ -467,8 +468,8 @@ Requirements:
             print(f"Error extracting document: {e}")
             return None, None, None
     
-    def upload_to_drive(self, filename, file_data):
-        """Upload PDF to Google Drive and return shareable link"""
+    def upload_to_drive(self, filename, file_data, mime_type):
+        """Upload document to Google Drive and return shareable link"""
         try:
             from io import BytesIO
             from googleapiclient.http import MediaIoBaseUpload
@@ -488,7 +489,7 @@ Requirements:
             # Upload file
             media = MediaIoBaseUpload(
                 BytesIO(file_data),
-                mimetype='application/pdf',
+                mimetype=mime_type,
                 resumable=True
             )
             
@@ -569,6 +570,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
