@@ -230,152 +230,152 @@ Requirements:
             else:
                 print(f"✗ Failed to generate announcement for: {event_name}")
 
-def setup_gmail(self):
-    """Initialize Gmail API"""
-    try:
-        creds = Credentials(
-            token=None,
-            refresh_token=os.getenv('GOOGLE_REFRESH_TOKEN'),
-            token_uri='https://oauth2.googleapis.com/token',
-            client_id=os.getenv('GOOGLE_CLIENT_ID'),
-            client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
-            scopes=[
-                'https://www.googleapis.com/auth/calendar.readonly',
-                'https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/gmail.modify'
-            ]
-        )
-        return build('gmail', 'v1', credentials=creds)
-    except Exception as e:
-        print(f"Error setting up Gmail: {e}")
-        return None
+    def setup_gmail(self):
+        """Initialize Gmail API"""
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token=os.getenv('GOOGLE_REFRESH_TOKEN'),
+                token_uri='https://oauth2.googleapis.com/token',
+                client_id=os.getenv('GOOGLE_CLIENT_ID'),
+                client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+                scopes=[
+                    'https://www.googleapis.com/auth/calendar.readonly',
+                    'https://www.googleapis.com/auth/gmail.readonly',
+                    'https://www.googleapis.com/auth/gmail.modify'
+                ]
+            )
+            return build('gmail', 'v1', credentials=creds)
+        except Exception as e:
+            print(f"Error setting up Gmail: {e}")
+            return None
 
-def check_meeting_minutes_emails(self):
-    """Check for new meeting minutes emails and create posts"""
-    if not hasattr(self, 'gmail_service') or not self.gmail_service:
-        print("Gmail not configured")
-        return
-    
-    print("\n" + "="*60)
-    print("Checking for meeting minutes emails...")
-    print("="*60 + "\n")
-    
-    try:
-        # Search for unread emails with "meeting minutes" in subject
-        query = 'subject:"meeting minutes" is:unread'
-        results = self.gmail_service.users().messages().list(
-            userId='me',
-            q=query,
-            maxResults=5
-        ).execute()
-        
-        messages = results.get('messages', [])
-        
-        if not messages:
-            print("No new meeting minutes emails found")
+    def check_meeting_minutes_emails(self):
+        """Check for new meeting minutes emails and create posts"""
+        if not hasattr(self, 'gmail_service') or not self.gmail_service:
+            print("Gmail not configured")
             return
+    
+        print("\n" + "="*60)
+        print("Checking for meeting minutes emails...")
+        print("="*60 + "\n")
+    
+        try:
+            # Search for unread emails with "meeting minutes" in subject
+            query = 'subject:"meeting minutes" is:unread'
+            results = self.gmail_service.users().messages().list(
+                userId='me',
+                q=query,
+                maxResults=5
+            ).execute()
         
-        print(f"Found {len(messages)} meeting minutes email(s)")
+            messages = results.get('messages', [])
         
-        for msg in messages:
-            self.process_meeting_minutes_email(msg['id'])
+            if not messages:
+                print("No new meeting minutes emails found")
+                return
+        
+            print(f"Found {len(messages)} meeting minutes email(s)")
+        
+            for msg in messages:
+                self.process_meeting_minutes_email(msg['id'])
             
-    except Exception as e:
-        print(f"Error checking emails: {e}")
+        except Exception as e:
+            print(f"Error checking emails: {e}")
 
-def process_meeting_minutes_email(self, message_id):
-    """Process a single meeting minutes email"""
-    try:
-        # Get the full message
-        message = self.gmail_service.users().messages().get(
-            userId='me',
-            id=message_id,
-            format='full'
-        ).execute()
+    def process_meeting_minutes_email(self, message_id):
+        """Process a single meeting minutes email"""
+        try:
+            # Get the full message
+            message = self.gmail_service.users().messages().get(
+                userId='me',
+                id=message_id,
+                format='full'
+            ).execute()
         
-        # Extract subject and body
-        headers = message['payload']['headers']
-        subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'Meeting Minutes')
+            # Extract subject and body
+            headers = message['payload']['headers']
+            subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'Meeting Minutes')
         
-        # Get email body (simplified - handles plain text)
-        body = self.get_email_body(message)
+            # Get email body (simplified - handles plain text)
+            body = self.get_email_body(message)
         
-        print(f"\nProcessing email: {subject}")
-        print(f"Body preview: {body[:200]}...")
+            print(f"\nProcessing email: {subject}")
+            print(f"Body preview: {body[:200]}...")
         
-        # Generate post from meeting minutes
-        post_content = self.generate_meeting_minutes_post(subject, body)
+            # Generate post from meeting minutes
+            post_content = self.generate_meeting_minutes_post(subject, body)
         
-        if post_content:
-            print("\nGenerated post:")
-            print("-" * 60)
-            print(post_content)
-            print("-" * 60)
+            if post_content:
+                print("\nGenerated post:")
+                print("-" * 60)
+                print(post_content)
+                print("-" * 60)
             
-            # Post to Facebook
-            success = self.post_to_facebook(post_content)
+                # Post to Facebook
+                success = self.post_to_facebook(post_content)
             
-            if success:
-                print("✓ Posted meeting minutes announcement")
-                # Mark email as read
-                self.gmail_service.users().messages().modify(
-                    userId='me',
-                    id=message_id,
-                    body={'removeLabelIds': ['UNREAD']}
-                ).execute()
-                print("✓ Marked email as read")
+                if success:
+                    print("✓ Posted meeting minutes announcement")
+                    # Mark email as read
+                    self.gmail_service.users().messages().modify(
+                        userId='me',
+                        id=message_id,
+                        body={'removeLabelIds': ['UNREAD']}
+                    ).execute()
+                    print("✓ Marked email as read")
+                else:
+                    print("✗ Failed to post")
             else:
-                print("✗ Failed to post")
-        else:
-            print("✗ Failed to generate post")
+                print("✗ Failed to generate post")
             
-    except Exception as e:
-        print(f"Error processing email: {e}")
+        except Exception as e:
+            print(f"Error processing email: {e}")
 
-def get_email_body(self, message):
-    """Extract email body text"""
-    try:
-        if 'parts' in message['payload']:
-            # Multipart message
-            for part in message['payload']['parts']:
-                if part['mimeType'] == 'text/plain':
-                    data = part['body'].get('data', '')
-                    if data:
-                        import base64
-                        return base64.urlsafe_b64decode(data).decode('utf-8')
-        else:
-            # Simple message
-            data = message['payload']['body'].get('data', '')
-            if data:
-                import base64
-                return base64.urlsafe_b64decode(data).decode('utf-8')
-        return ""
-    except Exception as e:
-        print(f"Error extracting email body: {e}")
-        return ""
+    def get_email_body(self, message):
+        """Extract email body text"""
+        try:
+            if 'parts' in message['payload']:
+                # Multipart message
+                for part in message['payload']['parts']:
+                    if part['mimeType'] == 'text/plain':
+                        data = part['body'].get('data', '')
+                        if data:
+                            import base64
+                            return base64.urlsafe_b64decode(data).decode('utf-8')
+            else:
+                # Simple message
+                data = message['payload']['body'].get('data', '')
+                if data:
+                    import base64
+                    return base64.urlsafe_b64decode(data).decode('utf-8')
+            return ""
+        except Exception as e:
+            print(f"Error extracting email body: {e}")
+            return ""
 
-def generate_meeting_minutes_post(self, subject, body):
-    """Generate a Facebook post about meeting minutes"""
-    prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
+    def generate_meeting_minutes_post(self, subject, body):
+        """Generate a Facebook post about meeting minutes"""
+        prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
 
-Email Subject: {subject}
-Email Content (summary): {body[:1000]}
+    Email Subject: {subject}
+    Email Content (summary): {body[:1000]}
 
-Requirements:
-- Announce that the meeting minutes are now available
-- Briefly summarize 2-3 key topics discussed (extract from the email content)
-- Warm, professional tone
-- Keep it under 200 words
-- Include a call to action (e.g., "Check your email for the full minutes")
-- Use 1-2 hashtags like #HallmarkHOA
-- 1 emoji maximum"""
+    Requirements:
+    - Announce that the meeting minutes are now available
+    - Briefly summarize 2-3 key topics discussed (extract from the email content)
+    - Warm, professional tone
+    - Keep it under 200 words
+    - Include a call to action (e.g., "Check your email for the full minutes")
+    - Use 1-2 hashtags like #HallmarkHOA
+    - 1 emoji maximum"""
 
-    try:
-        response = self.model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        print(f"Error generating meeting minutes post: {e}")
-        return None
+        try:
+            response = self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"Error generating meeting minutes post: {e}")
+            return None
 
 def main():
     """Main execution function"""
@@ -429,6 +429,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
