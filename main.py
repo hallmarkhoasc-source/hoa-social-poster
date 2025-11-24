@@ -32,7 +32,12 @@ class HOAPoster:
         self.gmail_service = None
         if self.has_google_credentials():
             self.gmail_service = self.setup_gmail()
-    
+
+        # Google Drive setup
+        self.drive_service = None
+        if self.has_google_credentials():
+            self.drive_service = self.setup_google_drive()
+        
     def has_google_credentials(self):
         """Check if Google credentials are available"""
         return all([
@@ -249,7 +254,28 @@ Requirements:
         except Exception as e:
             print(f"Error setting up Gmail: {e}")
             return None
-
+    
+    def setup_google_drive(self):
+        """Initialize Google Drive API"""
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token=os.getenv('GOOGLE_REFRESH_TOKEN'),
+                token_uri='https://oauth2.googleapis.com/token',
+                client_id=os.getenv('GOOGLE_CLIENT_ID'),
+                client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+                scopes=[
+                    'https://www.googleapis.com/auth/calendar.readonly',
+                    'https://www.googleapis.com/auth/gmail.readonly',
+                    'https://www.googleapis.com/auth/gmail.modify',
+                    'https://www.googleapis.com/auth/drive.file'
+                ]
+            )
+            return build('drive', 'v3', credentials=creds)
+        except Exception as e:
+            print(f"Error setting up Google Drive: {e}")
+            return None
+    
     def check_meeting_minutes_emails(self):
         """Check for new meeting minutes emails and create posts"""
         if not hasattr(self, 'gmail_service') or not self.gmail_service:
@@ -292,29 +318,39 @@ Requirements:
                 id=message_id,
                 format='full'
             ).execute()
-        
+            
             # Extract subject and body
             headers = message['payload']['headers']
             subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'Meeting Minutes')
-        
-            # Get email body (simplified - handles plain text)
+            
+            # Get email body
             body = self.get_email_body(message)
-        
+            
             print(f"\nProcessing email: {subject}")
             print(f"Body preview: {body[:200]}...")
-        
+            
+            # Extract and upload PDF attachment
+            pdf_filename, pdf_data = self.extract_pdf_attachment(message)
+            drive_link = None
+            
+            if pdf_filename and pdf_data:
+                print(f"Found PDF attachment: {pdf_filename}")
+                drive_link = self.upload_to_drive(pdf_filename, pdf_data)
+            else:
+                print("No PDF attachment found")
+            
             # Generate post from meeting minutes
-            post_content = self.generate_meeting_minutes_post(subject, body)
-        
+            post_content = self.generate_meeting_minutes_post(subject, body, drive_link)
+            
             if post_content:
                 print("\nGenerated post:")
                 print("-" * 60)
                 print(post_content)
                 print("-" * 60)
-            
+                
                 # Post to Facebook
                 success = self.post_to_facebook(post_content)
-            
+                
                 if success:
                     print("✓ Posted meeting minutes announcement")
                     # Mark email as read
@@ -328,7 +364,7 @@ Requirements:
                     print("✗ Failed to post")
             else:
                 print("✗ Failed to generate post")
-            
+                
         except Exception as e:
             print(f"Error processing email: {e}")
 
@@ -354,27 +390,120 @@ Requirements:
             print(f"Error extracting email body: {e}")
             return ""
 
-    def generate_meeting_minutes_post(self, subject, body):
+    def generate_meeting_minutes_post(self, subject, body, drive_link=None):
         """Generate a Facebook post about meeting minutes"""
+        
+        link_text = ""
+        if drive_link:
+            link_text = f"\n\nView the full meeting minutes here: {drive_link}"
+        
         prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
 
-    Email Subject: {subject}
-    Email Content (summary): {body[:1000]}
+Email Subject: {subject}
+Email Content (summary): {body[:1000]}
 
-    Requirements:
-    - Announce that the meeting minutes are now available
-    - Briefly summarize 2-3 key topics discussed (extract from the email content)
-    - Warm, professional tone
-    - Keep it under 200 words
-    - Include a call to action (e.g., "Check your email for the full minutes")
-    - Use 1-2 hashtags like #HallmarkHOA
-    - 1 emoji maximum"""
+Requirements:
+- Announce that the meeting minutes are now available
+- Briefly summarize 2-3 key topics discussed (extract from the email content)
+- Warm, professional tone
+- Keep it under 200 words
+- Include a call to action encouraging residents to read the full minutes
+- Use 1-2 hashtags like #HallmarkHOA
+- 1 emoji maximum
+- Do NOT include a link in your response - it will be added automatically"""
 
         try:
             response = self.model.generate_content(prompt)
-            return response.text
+            post_text = response.text
+            
+            # Add the Drive link at the end
+            if drive_link:
+                post_text += f"\n\n📄 Read the full minutes: {drive_link}"
+            
+            return post_text
         except Exception as e:
             print(f"Error generating meeting minutes post: {e}")
+            return None
+            
+    def extract_pdf_attachment(self, message):
+        """Extract PDF attachment from email"""
+        try:
+            parts = message.get('payload', {}).get('parts', [])
+            
+            for part in parts:
+                filename = part.get('filename', '')
+                
+                # Check if it's a PDF
+                if filename.lower().endswith('.pdf'):
+                    attachment_id = part['body'].get('attachmentId')
+                    
+                    if attachment_id:
+                        # Get the attachment
+                        attachment = self.gmail_service.users().messages().attachments().get(
+                            userId='me',
+                            messageId=message['id'],
+                            id=attachment_id
+                        ).execute()
+                        
+                        # Decode the attachment data
+                        import base64
+                        file_data = base64.urlsafe_b64decode(attachment['data'])
+                        
+                        return filename, file_data
+            
+            return None, None
+        except Exception as e:
+            print(f"Error extracting PDF: {e}")
+            return None, None
+    
+    def upload_to_drive(self, filename, file_data):
+        """Upload PDF to Google Drive and return shareable link"""
+        try:
+            from io import BytesIO
+            from googleapiclient.http import MediaIoBaseUpload
+            
+            folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+            
+            if not folder_id:
+                print("No Google Drive folder ID configured")
+                return None
+            
+            # Create file metadata
+            file_metadata = {
+                'name': filename,
+                'parents': [folder_id]
+            }
+            
+            # Upload file
+            media = MediaIoBaseUpload(
+                BytesIO(file_data),
+                mimetype='application/pdf',
+                resumable=True
+            )
+            
+            file = self.drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webViewLink'
+            ).execute()
+            
+            file_id = file.get('id')
+            web_link = file.get('webViewLink')
+            
+            # Make file publicly viewable
+            self.drive_service.permissions().create(
+                fileId=file_id,
+                body={
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+            ).execute()
+            
+            print(f"✓ Uploaded to Google Drive: {web_link}")
+            return web_link
+            
+        except Exception as e:
+            print(f"Error uploading to Drive: {e}")
             return None
 
 def main():
@@ -429,6 +558,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
