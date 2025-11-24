@@ -8,6 +8,13 @@ import requests
 
 class HOAPoster:
     def __init__(self):
+        print("Initializing HOAPoster class...")
+        # Facebook credentials
+        self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+        print(f"Facebook token present: {bool(self.fb_token)}")
+        self.page_id = '882966761564424'
+        print(f"Page ID: {self.page_id}")
+        
         # Facebook credentials
         self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
         self.page_id = '882966761564424'  # Hallmark HOA Page
@@ -372,33 +379,57 @@ Requirements:
 
 def main():
     """Main execution function"""
-    poster = HOAPoster()
+    print("=" * 60)
+    print("HOA POSTER STARTING")
+    print("=" * 60)
     
-    # Check what mode we're running in
+    # Check environment
     mode = os.getenv('RUN_MODE', 'calendar')
+    print(f"Run mode: {mode}")
     
-    if mode == 'calendar':
-        # Check calendar and post about upcoming events
-        poster.check_and_post_event_reminders()
-    
-    elif mode == 'meeting_minutes':
-        # Check for meeting minutes emails
-        poster.check_meeting_minutes_emails()
-    
-    elif mode == 'both':
-        # Do both calendar and meeting minutes
-        poster.check_and_post_event_reminders()
-        poster.check_meeting_minutes_emails()
-    
-    elif mode == 'custom':
-        # Post a custom message
-        topic = os.getenv('POST_TOPIC', 'General HOA update')
-        context = os.getenv('POST_CONTEXT', '')
-        poster.create_and_post(topic, context)
-    
-    else:
-        print(f"Unknown mode: {mode}")
-        print("Set RUN_MODE to 'calendar', 'meeting_minutes', 'both', or 'custom'")
+    try:
+        print("Initializing HOAPoster...")
+        poster = HOAPoster()
+        print("HOAPoster initialized successfully")
+        
+        if mode == 'calendar':
+            print("Running calendar mode...")
+            poster.check_and_post_event_reminders()
+        
+        elif mode == 'meeting_minutes':
+            print("Running meeting minutes mode...")
+            poster.check_meeting_minutes_emails()
+        
+        elif mode == 'both':
+            print("Running both calendar and meeting minutes modes...")
+            poster.check_and_post_event_reminders()
+            poster.check_meeting_minutes_emails()
+        
+        elif mode == 'custom':
+            print("Running custom mode...")
+            topic = os.getenv('POST_TOPIC', 'General HOA update')
+            context = os.getenv('POST_CONTEXT', '')
+            poster.create_and_post(topic, context)
+        
+        else:
+            print(f"Unknown mode: {mode}")
+            print("Set RUN_MODE to 'calendar', 'meeting_minutes', 'both', or 'custom'")
+        
+        print("\n" + "=" * 60)
+        print("HOA POSTER COMPLETED")
+        print("=" * 60)
+        
+    except Exception as e:
+        print(f"ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+if __name__ == "__main__":
+    print("Script started")
+    main()
+    print("Script ended")
+
 
 
 
