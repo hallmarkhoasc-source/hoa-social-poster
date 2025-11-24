@@ -332,15 +332,32 @@ Requirements:
             # Extract and upload document attachment (PDF or Word)
             doc_filename, doc_data, mime_type = self.extract_document_attachment(message)
             drive_link = None
+            document_text = ""
             
             if doc_filename and doc_data:
                 print(f"Found document attachment: {doc_filename}")
+                
+                # Extract text from document
+                document_text = self.extract_document_text(doc_filename, doc_data)
+                if document_text:
+                    print(f"Extracted {len(document_text)} characters from document")
+                else:
+                    print("Warning: Could not extract text from document")
+                
+                # Upload to Drive
                 drive_link = self.upload_to_drive(doc_filename, doc_data, mime_type)
             else:
                 print("No document attachment found")
             
             # Generate post from meeting minutes
-            post_content = self.generate_meeting_minutes_post(subject, body, drive_link)
+            # Use document text if available, otherwise fall back to email body
+            content_for_summary = document_text if document_text else body
+            post_content = self.generate_meeting_minutes_post(
+                subject, 
+                content_for_summary, 
+                drive_link,
+                is_from_document=(len(document_text) > 0)
+            )
             
             if post_content:
                 print("\nGenerated post:")
@@ -383,6 +400,8 @@ Requirements:
                 
         except Exception as e:
             print(f"Error processing email: {e}")
+            import traceback
+            traceback.print_exc()
 
     def get_email_body(self, message):
         """Extract email body text"""
@@ -405,7 +424,58 @@ Requirements:
         except Exception as e:
             print(f"Error extracting email body: {e}")
             return ""
-
+            
+    def extract_text_from_pdf(self, file_data):
+        """Extract text from PDF file"""
+        try:
+            from io import BytesIO
+            import PyPDF2
+            
+            pdf_file = BytesIO(file_data)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            
+            return text.strip()
+        except Exception as e:
+            print(f"Error extracting text from PDF: {e}")
+            return ""
+    
+    def extract_text_from_word(self, file_data):
+        """Extract text from Word document"""
+        try:
+            from io import BytesIO
+            from docx import Document
+            
+            doc_file = BytesIO(file_data)
+            doc = Document(doc_file)
+            
+            text = ""
+            for paragraph in doc.paragraphs:
+                text += paragraph.text + "\n"
+            
+            return text.strip()
+        except Exception as e:
+            print(f"Error extracting text from Word: {e}")
+            return ""
+    
+    def extract_document_text(self, filename, file_data):
+        """Extract text from document based on file type"""
+        if filename.lower().endswith('.pdf'):
+            return self.extract_text_from_pdf(file_data)
+        elif filename.lower().endswith('.docx'):
+            return self.extract_text_from_word(file_data)
+        elif filename.lower().endswith('.doc'):
+            # Old .doc format is harder to parse, try as docx
+            text = self.extract_text_from_word(file_data)
+            if not text:
+                print("Warning: .doc format may not be fully supported. Consider using .docx")
+            return text
+        else:
+            return ""
+            
     def get_or_create_gmail_label(self, label_name):
         """Get or create a Gmail label, return its ID"""
         try:
@@ -437,17 +507,27 @@ Requirements:
             print(f"Error getting/creating label: {e}")
             return None
             
-    def generate_meeting_minutes_post(self, subject, body, drive_link=None):
+    def generate_meeting_minutes_post(self, subject, content, drive_link=None, is_from_document=False):
         """Generate a Facebook post about meeting minutes"""
+        
+        # Limit content length for API (Gemini has token limits)
+        max_content_length = 8000  # characters
+        if len(content) > max_content_length:
+            content = content[:max_content_length] + "...\n[Content truncated]"
+        
+        content_type = "meeting minutes document" if is_from_document else "email"
         
         prompt = f"""Generate a friendly Facebook post for Hallmark HOA announcing that meeting minutes are available.
 
 Email Subject: {subject}
-Email Content (summary): {body[:1000]}
+Content from {content_type}:
+{content}
 
 Requirements:
 - Announce that the meeting minutes are now available
-- Briefly summarize 2-3 key topics discussed (extract from the email content)
+- Identify and briefly summarize 2-3 of the MOST IMPORTANT topics that were actually discussed in the meeting
+- Base your summary ONLY on the content provided - do NOT make up or assume topics
+- If you cannot identify specific topics from the content, just announce that minutes are available without listing topics
 - Warm, professional tone
 - Keep it under 200 words
 - Include a call to action encouraging residents to read the full minutes
@@ -612,6 +692,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
