@@ -353,13 +353,29 @@ Requirements:
                 
                 if success:
                     print("✓ Posted meeting minutes announcement")
-                    # Mark email as read
-                    self.gmail_service.users().messages().modify(
-                        userId='me',
-                        id=message_id,
-                        body={'removeLabelIds': ['UNREAD']}
-                    ).execute()
-                    print("✓ Marked email as read")
+                    
+                    # Get or create the "Meeting Minutes" label
+                    label_id = self.get_or_create_gmail_label("Meeting Minutes")
+                    
+                    if label_id:
+                        # Apply label and remove from inbox
+                        self.gmail_service.users().messages().modify(
+                            userId='me',
+                            id=message_id,
+                            body={
+                                'removeLabelIds': ['UNREAD', 'INBOX'],
+                                'addLabelIds': [label_id]
+                            }
+                        ).execute()
+                        print("✓ Marked as read, labeled, and moved to Meeting Minutes folder")
+                    else:
+                        # Fallback: just mark as read if label creation fails
+                        self.gmail_service.users().messages().modify(
+                            userId='me',
+                            id=message_id,
+                            body={'removeLabelIds': ['UNREAD']}
+                        ).execute()
+                        print("✓ Marked email as read")
                 else:
                     print("✗ Failed to post")
             else:
@@ -390,6 +406,37 @@ Requirements:
             print(f"Error extracting email body: {e}")
             return ""
 
+    def get_or_create_gmail_label(self, label_name):
+        """Get or create a Gmail label, return its ID"""
+        try:
+            # Check if label already exists
+            results = self.gmail_service.users().labels().list(userId='me').execute()
+            labels = results.get('labels', [])
+            
+            for label in labels:
+                if label['name'] == label_name:
+                    print(f"Found existing label: {label_name}")
+                    return label['id']
+            
+            # Label doesn't exist, create it
+            label_object = {
+                'name': label_name,
+                'labelListVisibility': 'labelShow',
+                'messageListVisibility': 'show'
+            }
+            
+            created_label = self.gmail_service.users().labels().create(
+                userId='me',
+                body=label_object
+            ).execute()
+            
+            print(f"Created new label: {label_name}")
+            return created_label['id']
+            
+        except Exception as e:
+            print(f"Error getting/creating label: {e}")
+            return None
+            
     def generate_meeting_minutes_post(self, subject, body, drive_link=None):
         """Generate a Facebook post about meeting minutes"""
         
@@ -565,6 +612,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
