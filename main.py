@@ -8,23 +8,23 @@ import requests
 
 class HOAPoster:
     def __init__(self):
-    # Facebook credentials
-    self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
-    self.page_id = '882966761564424'  # Hallmark HOA Page
+        # Facebook credentials
+        self.fb_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+        self.page_id = '882966761564424'  # Hallmark HOA Page
     
-    # Gemini API setup
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-    self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        # Gemini API setup
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
     
-    # Google Calendar setup
-    self.calendar_service = None
-    if self.has_google_credentials():
-        self.calendar_service = self.setup_google_calendar()
+        # Google Calendar setup
+        self.calendar_service = None
+        if self.has_google_credentials():
+            self.calendar_service = self.setup_google_calendar()
     
-    # Gmail setup
-    self.gmail_service = None
-    if self.has_google_credentials():
-        self.gmail_service = self.setup_gmail()
+        # Gmail setup
+        self.gmail_service = None
+        if self.has_google_credentials():
+            self.gmail_service = self.setup_gmail()
     
     def has_google_credentials(self):
         """Check if Google credentials are available"""
@@ -399,5 +399,6 @@ def main():
     else:
         print(f"Unknown mode: {mode}")
         print("Set RUN_MODE to 'calendar', 'meeting_minutes', 'both', or 'custom'")
+
 
 
