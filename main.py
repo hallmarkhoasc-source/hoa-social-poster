@@ -125,7 +125,127 @@ class HOAPoster:
                     print(f"✗ Failed to post announcement for: {event_name}")
             else:
                 print(f"✗ Failed to generate announcement for: {event_name}")
+
+    # ==================== HOLIDAY FUNCTIONS ====================
     
+    def get_todays_holiday(self):
+        """Check if today is a major US holiday"""
+        import holidays
+        
+        # Get US holidays
+        us_holidays = holidays.US()
+        
+        today = datetime.now().date()
+        
+        # Check if today is a holiday
+        if today in us_holidays:
+            return us_holidays.get(today)
+        
+        return None
+    
+    def should_post_holiday(self):
+        """Determine if we should post for today's holiday"""
+        holiday_name = self.get_todays_holiday()
+        
+        if not holiday_name:
+            return False, None
+        
+        # List of major holidays we want to post about
+        major_holidays = [
+            "New Year's Day",
+            "Martin Luther King Jr. Day",
+            "Presidents' Day",
+            "Mother's Day",
+            "Father's Day",
+            "Memorial Day",
+            "Independence Day",
+            "Labor Day",
+            "Halloween",
+            "Veterans Day",
+            "Thanksgiving",
+            "Christmas Day",
+            "Easter Sunday"  # Note: Easter is calculated differently
+        ]
+        
+        # Check if this holiday is in our list (partial match)
+        for major_holiday in major_holidays:
+            if major_holiday.lower() in holiday_name.lower():
+                return True, holiday_name
+        
+        return False, holiday_name
+    
+    def generate_holiday_post(self, holiday_name):
+        """Generate a holiday greeting post"""
+        prompt = f"""Generate a warm, friendly holiday greeting post for Hallmark HOA's Facebook page.
+
+Holiday: {holiday_name}
+
+Requirements:
+- Write a brief, heartfelt greeting appropriate for {holiday_name}
+- Keep it inclusive and community-focused
+- Mention the Hallmark HOA community
+- Keep it under 150 words
+- Use a warm, neighborly tone
+- Include 1-2 relevant emojis if appropriate
+- Add 1-2 hashtags (like #HallmarkHOA and holiday-specific)
+- Make it feel genuine, not corporate or generic"""
+
+        return self.generate_with_retry(prompt)
+    
+    def check_and_post_holiday_greeting(self):
+        """Check for holidays and post greetings"""
+        print("\n" + "="*60)
+        print("Checking for holidays...")
+        print("="*60 + "\n")
+        
+        should_post, holiday_name = self.should_post_holiday()
+        
+        if not should_post:
+            print("No major holiday today")
+            return
+        
+        print(f"Today is: {holiday_name}")
+        
+        # Check if we already posted today (to avoid duplicate posts)
+        if self.already_posted_today('holiday'):
+            print("Already posted a holiday greeting today")
+            return
+        
+        post_content = self.generate_holiday_post(holiday_name)
+        
+        if post_content:
+            print("\nGenerated holiday post:")
+            print("-" * 60)
+            print(post_content)
+            print("-" * 60)
+            
+            success = self.post_to_facebook(post_content)
+            
+            if success:
+                print(f"✓ Posted holiday greeting for {holiday_name}")
+                self.mark_posted_today('holiday')
+            else:
+                print("✗ Failed to post holiday greeting")
+        else:
+            print("✗ Failed to generate holiday post")
+    
+    def already_posted_today(self, post_type):
+        """Check if we already posted this type today (simple file-based tracking)"""
+        try:
+            tracking_file = f'/tmp/hoa_posted_{post_type}_{datetime.now().date()}.flag'
+            return os.path.exists(tracking_file)
+        except:
+            return False
+    
+    def mark_posted_today(self, post_type):
+        """Mark that we posted this type today"""
+        try:
+            tracking_file = f'/tmp/hoa_posted_{post_type}_{datetime.now().date()}.flag'
+            with open(tracking_file, 'w') as f:
+                f.write(str(datetime.now()))
+        except Exception as e:
+            print(f"Warning: Could not create tracking file: {e}")
+            
     # ==================== GMAIL FUNCTIONS ====================
     
     def get_email_body(self, message):
@@ -872,7 +992,11 @@ def main():
         if mode == 'calendar':
             print("Running calendar mode...")
             poster.check_and_post_event_reminders()
-    
+        
+        elif mode == 'holidays':
+            print("Running holiday mode...")
+            poster.check_and_post_holiday_greeting()
+        
         elif mode == 'meeting_minutes':
             print("Running meeting minutes mode...")
             poster.check_meeting_minutes_emails()
@@ -882,7 +1006,8 @@ def main():
             poster.check_facebook_post_emails()
     
         elif mode == 'both':
-            print("Running calendar, meeting minutes, and Facebook post modes...")
+            print("Running all automated modes...")
+            poster.check_and_post_holiday_greeting()
             poster.check_and_post_event_reminders()
             poster.check_meeting_minutes_emails()
             poster.check_facebook_post_emails()
@@ -895,7 +1020,7 @@ def main():
     
         else:
             print(f"Unknown mode: {mode}")
-            print("Set RUN_MODE to 'calendar', 'meeting_minutes', 'facebook_posts', 'both', or 'custom'")
+            print("Set RUN_MODE to 'calendar', 'meeting_minutes', 'facebook_posts', 'holidays', 'both', or 'custom'")
     
         print("\n" + "=" * 60)
         print("HOA POSTER COMPLETED")
@@ -911,6 +1036,7 @@ if __name__ == "__main__":
     print("Script started")
     main()
     print("Script ended")
+
 
 
 
