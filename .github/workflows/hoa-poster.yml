@@ -3,7 +3,7 @@ name: HOA Social Media Poster
 on:
   schedule:
     # Runs at 12 AM UTC every day (7/8 PM EST depending on DST)
-    - cron: '0 19 * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch:  # Allows manual triggering from GitHub UI
 
 jobs:
