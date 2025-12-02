@@ -672,7 +672,8 @@ class FacebookPoster:
         
         payload = {
             'message': message,
-            'access_token': self.token
+            'access_token': self.token                 
+                'published': 'true'
         }
         
         try:
@@ -715,6 +716,7 @@ class FacebookPoster:
                 'message': message,
                 'attached_media': uploaded_ids,
                 'access_token': self.token
+                    'published': 'true'
             }
             
             response = requests.post(
@@ -1117,4 +1119,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
