@@ -672,7 +672,7 @@ class FacebookPoster:
         
         payload = {
             'message': message,
-            'access_token': self.token                 
+            'access_token': self.token,                 
                 'published': 'true'
         }
         
@@ -715,7 +715,7 @@ class FacebookPoster:
             payload = {
                 'message': message,
                 'attached_media': uploaded_ids,
-                'access_token': self.token
+                'access_token': self.token,
                     'published': 'true'
             }
             
@@ -1119,5 +1119,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
