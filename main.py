@@ -668,7 +668,7 @@ class FacebookPoster:
     
     def post_text(self, message: str) -> bool:
         """Post text message to Facebook Page"""
-        url = f"https://graph.facebook.com/{self.GRAPH_API_VERSION}/{self.page_id}/feed"
+        url = f"https://graph.facebook.com/v21.0/{self.page_id}/feed"
         
         payload = {
             'message': message,
@@ -708,7 +708,7 @@ class FacebookPoster:
                 return self.post_text(message)
             
             # Post with images
-            url = url = f"https://graph.facebook.com/{self.GRAPH_API_VERSION}/{self.page_id}/feed"
+            url = url = f"https://graph.facebook.com/v21.0/{self.page_id}/feed"
             
             import json
             payload = {
