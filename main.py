@@ -514,7 +514,7 @@ class AIContentGenerator:
     
     def __init__(self, api_key: str):
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
     
     def generate(self, prompt: str, max_retries: int = 3) -> Optional[str]:
         """Generate content with retry logic for rate limits"""
@@ -1119,6 +1119,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
